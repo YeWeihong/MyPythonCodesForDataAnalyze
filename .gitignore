@@ -1,0 +1,35 @@
+# 输出目录
+output/
+outputs/
+result/
+results/
+figures/
+plots/
+logs/
+tmp/
+temp/
+cache/
+Doppler_plots/
+__pycache__/
+
+# 大文件数据
+*.npy
+*.npz
+*.mat
+*.h5
+*.hdf5
+*.pkl
+
+# 图片输出
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+*.pdf
+
+# Excel 临时文件
+~$*.xlsx
+
+# Jupyter 检查点
+.ipynb_checkpoints/

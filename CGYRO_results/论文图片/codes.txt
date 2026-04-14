@@ -1,0 +1,51 @@
+import numpy as np
+import os
+
+# 定义一个保存数据的文件夹路径，你可以修改为你电脑上的实际路径
+# 如果在服务器上运行，可以写绝对路径，例如 '/home/your_username/gyro_data_export/'
+save_dir = './gyro_ballooning_data/' 
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
+
+print(f"开始提取数据并保存至: {os.path.abspath(save_dir)}")
+
+for k in keys:
+    if k is None:
+        continue
+    code = root['OUTPUTS'][runid][plot_dims][k]['SETTINGS']['SETUP']['code']
+    
+    # 前面的容错判断与原脚本一致
+    if code not in root['OUTPUTS'][runid][plot_dims][k]['OUTPUTS']:
+        continue
+    if 'balloon' not in root['OUTPUTS'][runid][plot_dims][k]['OUTPUTS'][code]:
+        continue
+    if bf not in root['OUTPUTS'][runid][plot_dims][k]['OUTPUTS'][code]['balloon']:
+        continue
+        
+    # 提取核心数据
+    b = root['OUTPUTS'][runid][plot_dims][k]['OUTPUTS'][code]['balloon'][bf]
+    
+    # 获取原始的复数数据
+    y_data_complex = b.where(b.t >= (1.0 - w) * b.t.max(), drop=True).mean(dim='t').values
+    x_data_complex = b.theta_b_over_pi.values
+    
+    # 【核心修改点】：分离实部、虚部和绝对值
+    x_data = x_data_complex.real       # X轴通常本身就是实数，加 .real 保险
+    y_real = y_data_complex.real       # 提取实部
+    y_imag = y_data_complex.imag       # 提取虚部
+    y_abs = np.abs(y_data_complex)     # 计算绝对值 (幅值)
+    
+    kyrhos = root['OUTPUTS'][runid][plot_dims][k]['OUTPUTS'][code]['kyrhos'][0]
+    
+    # 组合为 4 列纯数值数据
+    export_data = np.column_stack((x_data, y_real, y_imag, y_abs))
+    
+    # 构造文件名
+    filename = f"{bf}_{k}_ky{kyrhos:.2f}.csv"
+    filepath = os.path.join(save_dir, filename)
+    
+    # 更新表头，保存为纯数值 CSV
+    np.savetxt(filepath, export_data, delimiter=',', 
+               header='theta_b_over_pi, Real, Imaginary, Absolute', comments='')
+               
+    print(f"成功保存: {filename}")
