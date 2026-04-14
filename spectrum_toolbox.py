@@ -6,7 +6,7 @@ from scipy import fft
 from MDSplus import Connection
 import os
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 class MDSDataLoader:
     def __init__(self, server="202.127.204.12", tree="east"):
@@ -264,7 +264,7 @@ class ProbePlotter:
         'khpt': {'prefix': '\\khp', 'suffix': 't', 'unit': 'm/s'},
         'bpol': {'prefix': '\\bpol', 'suffix': '', 'unit': 'T'},
         'ece1-9': {'prefix': '\\hrs0', 'suffix': 'h', 'unit': 'V'},
-        'ece10-48': {'prefix': '\\hrs', 'suffix': 'h', 'unit': 'V'},
+        'ece10-32': {'prefix': '\\hrs', 'suffix': 'h', 'unit': 'V'},
         'cmplt': {'prefix': '\\cmpl', 'suffix': 't', 'unit': 'V'},
         'cmpt': {'prefix': '\\cmp', 'suffix': 't', 'unit': 'V'},
         'kmpt': {'prefix': '\\kmp', 'suffix': 't', 'unit': 'V'},
@@ -287,20 +287,57 @@ class ProbePlotter:
         'pointf': {'prefix': '\\point_f', 'suffix': '', 'unit': 'V'},
         'dau': {'prefix': '\\dau', 'suffix': '', 'unit': 'V'},
         'dal': {'prefix': '\\dal', 'suffix': '', 'unit': 'V'},
+        # Divertor Langmuir probe ion-saturation-current signals
+        'uiis': {'prefix': '\\UIIS', 'suffix': '', 'unit': 'A', 'pad': 2, 'valid_range': (1, 28)},
+        'uois': {'prefix': '\\UOIS', 'suffix': '', 'unit': 'A', 'pad': 2, 'valid_range': (1, 26)},
+        'liis': {'prefix': '\\LIIS', 'suffix': '', 'unit': 'A', 'pad': 2, 'valid_range': (1, 15)},
+        'lois': {'prefix': '\\LOIS', 'suffix': '', 'unit': 'A', 'pad': 2, 'valid_range': (1, 20)},
     }
     
     def __init__(self, loader: MDSDataLoader = None):
         self.loader = loader or MDSDataLoader()
         self.analyzer = SpectralAnalyzer()
+
+    @staticmethod
+    def _format_probe_num(probe_num, cfg):
+        """根据配置格式化探针编号，并检查合法范围。"""
+        if isinstance(probe_num, str):
+            probe_num_str = probe_num.strip()
+            if not probe_num_str:
+                raise ValueError("probe_num cannot be empty")
+            if probe_num_str.isdigit():
+                probe_num_int = int(probe_num_str)
+            else:
+                raise ValueError(f"probe_num must be integer-like, got: {probe_num}")
+        else:
+            probe_num_int = int(probe_num)
+
+        valid_range = cfg.get('valid_range')
+        if valid_range is not None:
+            min_probe, max_probe = valid_range
+            if not (min_probe <= probe_num_int <= max_probe):
+                raise ValueError(
+                    f"probe_num={probe_num_int} out of range for this signal, "
+                    f"should be within [{min_probe}, {max_probe}]"
+                )
+
+        pad = int(cfg.get('pad', 0))
+        if pad > 0:
+            return str(probe_num_int).zfill(pad)
+        return str(probe_num_int)
+
+    def _build_signal_path(self, signal_name, probe_num):
+        cfg = self.SIGNAL_CONFIG.get(signal_name.lower())
+        if not cfg:
+            raise ValueError(f"Unknown Data Type: {signal_name}")
+        probe_str = self._format_probe_num(probe_num, cfg)
+        signal_path = f"{cfg['prefix']}{probe_str}{cfg['suffix']}"
+        return cfg, signal_path
     
     def compute_spectrogram_data(self, shot, probe_num, signal_name,
                                    time_range, time_window=0.1, overlap=0.5, tree=None,
                                    band_pass=None, average_point=1):
-        cfg = self.SIGNAL_CONFIG.get(signal_name)
-        if not cfg:
-            raise ValueError(f"Unknown Data Type{signal_name}")
-        
-        signal_path = f"{cfg['prefix']}{probe_num}{cfg['suffix']}"
+        cfg, signal_path = self._build_signal_path(signal_name, probe_num)
         time, data = self.loader.get_signal(shot, signal_path, time_range, tree=tree)
 
         if len(data) == 0:
@@ -347,6 +384,7 @@ class ProbePlotter:
                                time_range, freq_range, time_window=0.1,
                                overlap=0.5, figsize_per_probe=(8, 1.5),
                                save_path=None, tree=None, band_pass=None, average_point=1):
+        signal_name = signal_name.lower()
         cfg = self.SIGNAL_CONFIG.get(signal_name)
         if not cfg:
             raise ValueError(f"Unknown Data Type: {signal_name}")
