@@ -82,6 +82,7 @@ class ScreenConfig:
     t_max: float = 10.0
     dt: float = 1e-3  # 1 ms
 
+<<<<<<< HEAD
     # 统计/研究时间窗策略
     # full: 全程
     # fixed: 固定时间窗 [analysis_t1, analysis_t2]
@@ -92,6 +93,8 @@ class ScreenConfig:
     ip_stable_frac: float = 0.90      # 平顶判据: |Ip| >= frac * max(|Ip|)
     ip_smooth_window: float = 0.05    # Ip 平滑窗口(s)
 
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     # H-mode 粗判据
     baseline_window: float = 0.10      # 100 ms
     dalpha_drop_ratio: float = 0.80
@@ -299,6 +302,7 @@ def build_heating_signals(sig: Dict[str, np.ndarray]) -> None:
     sig["P_total"] = sig["P_RF"] + sig["P_NBI"]
 
 
+<<<<<<< HEAD
 def build_analysis_mask(
     t: np.ndarray,
     ip: np.ndarray,
@@ -352,13 +356,19 @@ def build_analysis_mask(
     raise ValueError(f"未知 analysis_mode: {cfg.analysis_mode}")
 
 
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
 def detect_hmode_windows(
     t: np.ndarray,
     dalpha: np.ndarray,
     wmhd: np.ndarray,
     ne: np.ndarray,
+<<<<<<< HEAD
     cfg: ScreenConfig,
     analysis_mask: Optional[np.ndarray] = None
+=======
+    cfg: ScreenConfig
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
 ) -> List[Tuple[float, float, int, int]]:
     """
     基于“相对前一段基线”的 Dalpha 下降 + WMHD 上升，
@@ -366,11 +376,23 @@ def detect_hmode_windows(
     """
     n_base = max(5, int(cfg.baseline_window / cfg.dt))
 
+<<<<<<< HEAD
     d_smooth = pd.Series(dalpha).rolling(n_base, min_periods=max(3, n_base // 5)).median().bfill().ffill().to_numpy()
     w_smooth = pd.Series(wmhd).rolling(n_base, min_periods=max(3, n_base // 5)).median().bfill().ffill().to_numpy()
 
     d_base = np.roll(d_smooth, n_base)
     w_base = np.roll(w_smooth, n_base)
+=======
+    # 先平滑，减少尖峰影响
+    d_smooth = pd.Series(dalpha).rolling(n_base, min_periods=max(3, n_base // 5)).median().bfill().ffill().to_numpy()
+    w_smooth = pd.Series(wmhd).rolling(n_base, min_periods=max(3, n_base // 5)).median().bfill().ffill().to_numpy()
+
+    # 关键：把基线整体向前移一个窗口，表示“拿当前值和更早之前的状态比”
+    d_base = np.roll(d_smooth, n_base)
+    w_base = np.roll(w_smooth, n_base)
+
+    # 前 n_base 点没有历史基线，置为 NaN
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     d_base[:n_base] = np.nan
     w_base[:n_base] = np.nan
 
@@ -379,12 +401,17 @@ def detect_hmode_windows(
     cond3 = np.isfinite(ne)
 
     mask = cond1 & cond2 & cond3
+<<<<<<< HEAD
     if analysis_mask is not None:
         if analysis_mask.shape != mask.shape:
             raise ValueError("analysis_mask 与时间轴长度不一致")
         mask = mask & analysis_mask
 
     regions = contiguous_regions(mask, t)
+=======
+    regions = contiguous_regions(mask, t)
+
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     valid_regions = []
     for t1, t2, i1, i2 in regions:
         if (t2 - t1) >= cfg.min_hmode_duration:
@@ -396,17 +423,25 @@ def extract_main_window_features(
     t: np.ndarray,
     sig: Dict[str, np.ndarray],
     hwin: Tuple[float, float, int, int],
+<<<<<<< HEAD
     cfg: ScreenConfig,
     analysis_mask: Optional[np.ndarray] = None
 ) -> Dict[str, float]:
     """
     针对一个 H-mode 候选时间窗提取特征。
     q95_mean 使用 analysis_mask（若给定），否则用 hwin。
+=======
+    cfg: ScreenConfig
+) -> Dict[str, float]:
+    """
+    针对一个 H-mode 候选时间窗提取特征。
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     """
     t1, t2, i1, i2 = hwin
     mask = np.zeros_like(t, dtype=bool)
     mask[i1:i2 + 1] = True
 
+<<<<<<< HEAD
     stat_mask = mask
     if analysis_mask is not None and analysis_mask.shape == mask.shape and np.any(analysis_mask):
         stat_mask = analysis_mask
@@ -415,6 +450,12 @@ def extract_main_window_features(
     pre_mask = (t >= pre_t1) & (t < t1)
 
     q95_mean = float(np.nanmean(sig["q95"][stat_mask])) if np.any(stat_mask) else np.nan
+=======
+    pre_t1 = max(cfg.t_min, t1 - cfg.baseline_window)
+    pre_mask = (t >= pre_t1) & (t < t1)
+
+    q95_mean = float(np.nanmean(sig["q95"][mask])) if np.any(mask) else np.nan
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     ne_mean = float(np.nanmean(sig["ne"][mask])) if np.any(mask) else np.nan
 
     p_rf = float(np.nanmean(sig["P_RF"][mask])) if np.any(mask) else np.nan
@@ -435,7 +476,10 @@ def extract_main_window_features(
         "quiet_index": quiet_index,
     }
 
+<<<<<<< HEAD
 # ...existing code...
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
 
 def score_features(feat: Dict[str, float], cfg: ScreenConfig) -> Tuple[int, str]:
     """
@@ -473,14 +517,21 @@ def score_features(feat: Dict[str, float], cfg: ScreenConfig) -> Tuple[int, str]
 
     return score, label
 
+<<<<<<< HEAD
 # ...existing code...
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
 
 def choose_best_window(
     t: np.ndarray,
     sig: Dict[str, np.ndarray],
     wins: List[Tuple[float, float, int, int]],
+<<<<<<< HEAD
     cfg: ScreenConfig,
     analysis_mask: Optional[np.ndarray] = None
+=======
+    cfg: ScreenConfig
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
 ) -> Tuple[Tuple[float, float, int, int], Dict[str, float], int, str]:
     """
     从多个候选 H-mode 时间窗中选择得分最高的那个。
@@ -491,7 +542,11 @@ def choose_best_window(
     best_label = "C"
 
     for win in wins:
+<<<<<<< HEAD
         feat = extract_main_window_features(t, sig, win, cfg, analysis_mask=analysis_mask)
+=======
+        feat = extract_main_window_features(t, sig, win, cfg)
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
         score, label = score_features(feat, cfg)
         if score > best_score:
             best_score = score
@@ -601,28 +656,46 @@ def process_one_shot(
 
     build_heating_signals(sig)
 
+<<<<<<< HEAD
     analysis_mask, analysis_t1, analysis_t2, analysis_mode_used = build_analysis_mask(
         t=t_grid,
         ip=sig["Ip"],
         cfg=cfg
     )
 
+=======
+    print("q95 finite count =", np.isfinite(sig["q95"]).sum())
+    print("q95 all nan =", np.isnan(sig["q95"]).all())
+    if np.isfinite(sig["q95"]).any():
+        print("q95 min/max =", np.nanmin(sig["q95"]), np.nanmax(sig["q95"]))
+
+    print("Dalpha finite count =", np.isfinite(sig["Dalpha"]).sum())
+    print("WMHD finite count =", np.isfinite(sig["WMHD"]).sum())
+    print("ne finite count =", np.isfinite(sig["ne"]).sum())
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     wins = detect_hmode_windows(
         t=t_grid,
         dalpha=sig["Dalpha"],
         wmhd=sig["WMHD"],
         ne=sig["ne"],
+<<<<<<< HEAD
         cfg=cfg,
         analysis_mask=analysis_mask
+=======
+        cfg=cfg
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     )
 
     if len(wins) == 0:
         row = {
             "shot": shot,
             "has_hmode_candidate": False,
+<<<<<<< HEAD
             "analysis_mode": analysis_mode_used,
             "analysis_t1": analysis_t1,
             "analysis_t2": analysis_t2,
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
             "hmode_t1": np.nan,
             "hmode_t2": np.nan,
             "hmode_duration": np.nan,
@@ -650,15 +723,22 @@ def process_one_shot(
         return row
 
     best_win, best_feat, best_score, best_label = choose_best_window(
+<<<<<<< HEAD
         t=t_grid, sig=sig, wins=wins, cfg=cfg, analysis_mask=analysis_mask
+=======
+        t=t_grid, sig=sig, wins=wins, cfg=cfg
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     )
 
     row = {
         "shot": shot,
         "has_hmode_candidate": True,
+<<<<<<< HEAD
         "analysis_mode": analysis_mode_used,
         "analysis_t1": analysis_t1,
         "analysis_t2": analysis_t2,
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
         "hmode_t1": best_feat["hmode_t1"],
         "hmode_t2": best_feat["hmode_t2"],
         "hmode_duration": best_feat["hmode_duration"],
@@ -796,6 +876,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--loglevel", type=str, default="INFO", help="日志等级")
 
+<<<<<<< HEAD
     # 分析窗口策略
     p.add_argument(
         "--analysis-mode",
@@ -809,6 +890,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--ip-stable-frac", type=float, default=0.90, help="ip_stable 阈值比例")
     p.add_argument("--ip-smooth-window", type=float, default=0.05, help="Ip 平滑窗口(s)")
 
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     return p
 
 
@@ -831,18 +914,24 @@ def main() -> None:
     if len(shots) == 0:
         raise ValueError("炮号列表为空")
 
+<<<<<<< HEAD
     if args.analysis_mode == "fixed" and (args.analysis_t1 is None or args.analysis_t2 is None):
         parser.error("analysis-mode=fixed 时，必须给出 --analysis-t1 和 --analysis-t2")
 
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
     cfg = ScreenConfig(
         t_min=args.tmin,
         t_max=args.tmax,
         dt=args.dt,
+<<<<<<< HEAD
         analysis_mode=args.analysis_mode,
         analysis_t1=args.analysis_t1,
         analysis_t2=args.analysis_t2,
         ip_stable_frac=args.ip_stable_frac,
         ip_smooth_window=args.ip_smooth_window,
+=======
+>>>>>>> cb6039dfc2b0f4046a4b4e5a6376ae26a0ab0c8b
         baseline_window=args.baseline_window,
         dalpha_drop_ratio=args.dalpha_drop,
         wmhd_rise_ratio=args.wmhd_rise,
