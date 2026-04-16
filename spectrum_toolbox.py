@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy import fft
 from MDSplus import Connection
 import os
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 
 __version__ = "2.2.0"
 
@@ -412,6 +413,9 @@ class ProbePlotter:
                 continue
             
             ax.set_ylabel(f"Freq [kHz]\n{signal_name}{probe_num}")
+            ax.xaxis.set_major_locator(MultipleLocator(0.10))   # 主刻度每 0.10 s
+            ax.xaxis.set_minor_locator(MultipleLocator(0.01))   # 次刻度保留 0.01 s 精度
+            ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
             if i == n_probes - 1:
                 ax.set_xlabel("Time [s]")
             else:

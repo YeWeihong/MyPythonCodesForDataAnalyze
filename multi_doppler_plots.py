@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 
 from NeFluc import ReflAnalyzer
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
 
 
 # ======================
@@ -38,19 +40,18 @@ plt.rcParams.update({
 # ======================
 T_START = 2.5
 T_END = 3.5
-JUDGE = 1
-FMAX_KHZ = 4000
+JUDGE = 2
+FMAX_KHZ = 125
 OUTDIR = "Doppler_plots"
 
 # 你的需求是两个区间：
 # 79651-80495 -> 20 MHz
 # 80496-97534 -> 10 MHz
 # SHOT_RANGES = [
-#     (79651, 80495),
-#     (80496, 97534),
+#     (80206, 80495)
 # ]
 SHOT_RANGES = [
-    (79651, 80495) #--- 20 MHz ---
+    (80485, 80491) #--- 10 MHz ---
 ]
 # SHOT_RANGES = [
 #     (80483, 80486)
@@ -96,7 +97,7 @@ def make_analyzer(shot, t_start, t_end, judge):
 
     # 可选：手动指定参数，保证 judge=1 时分辨率一致
     analyzer.fftpoint_j1 = 2048
-    analyzer.step_factor_j1_doppler = 2
+    analyzer.step_factor_j1_doppler = 1
 
     return analyzer
 
@@ -161,28 +162,36 @@ def plot_one_shot(shot, outdir, t_start, t_end, judge, fmax_khz):
         ax.tick_params(axis='x', which='minor', length=3, width=0.8)
         ax.tick_params(axis='y', which='major', labelsize=12, length=6, width=1.0)
 
-        cbar = fig.colorbar(im, ax=ax, pad=0.01)
-        cbar.set_label("log10(PSD)", fontsize=13)
-        cbar.ax.tick_params(labelsize=12)
+        # cbar = fig.colorbar(im, ax=ax, pad=0.01)
+        # cbar.set_label("log10(PSD)", fontsize=13)
+        # cbar.ax.tick_params(labelsize=12)
 
     axes[-1].set_xlabel("Time (s)", fontsize=13)
     axes[-1].tick_params(axis='x', labelrotation=30)
 
-    plt.tight_layout()
+    # plt.tight_layout()
 
     save_name = f"Doppler_{shot}_{t_start:.2f}_{t_end:.2f}s.png"
     save_path = os.path.join(outdir, save_name)
-    fig.savefig(
-        save_path,
-        dpi=110,
-        bbox_inches='tight',
-        pad_inches=0.03,
-        pil_kwargs={"optimize": True, "compress_level": 9}
-    )
+    fig.savefig(save_path, dpi=85)
     plt.close(fig)
 
     return save_path
 
+def process_one_shot(shot):
+    fs_mhz = get_fs_by_shot(shot) / 1e6
+    try:
+        save_path = plot_one_shot(
+            shot=shot,
+            outdir=OUTDIR,
+            t_start=T_START,
+            t_end=T_END,
+            judge=JUDGE,
+            fmax_khz=FMAX_KHZ
+        )
+        return (shot, int(fs_mhz), "OK", save_path)
+    except Exception as e:
+        return (shot, int(fs_mhz), "FAIL", str(e))
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
@@ -194,35 +203,29 @@ def main():
     print(f"总任务数: {total}")
     print(f"输出目录: {os.path.abspath(OUTDIR)}")
 
+    max_workers = 3   # 先从 2 开始，不要一上来开 4
+
     with open(log_csv, "w", newline="", encoding="utf-8-sig") as fcsv:
         writer = csv.writer(fcsv)
         writer.writerow(["shot", "fs_MHz", "status", "message"])
 
-        for idx, shot in enumerate(shots, start=1):
-            fs_mhz = get_fs_by_shot(shot) / 1e6
-            print(f"[{idx}/{total}] Processing shot {shot} | fs = {fs_mhz:.0f} MHz")
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(process_one_shot, shot): shot for shot in shots}
 
-            try:
-                save_path = plot_one_shot(
-                    shot=shot,
-                    outdir=OUTDIR,
-                    t_start=T_START,
-                    t_end=T_END,
-                    judge=JUDGE,
-                    fmax_khz=FMAX_KHZ
-                )
-                print(f"  -> Saved: {save_path}")
-                writer.writerow([shot, int(fs_mhz), "OK", save_path])
+            done_count = 0
+            for future in as_completed(futures):
+                result = future.result()
+                shot, fs_mhz, status, message = result
 
-            except Exception as e:
-                err_msg = str(e)
-                print(f"  -> Failed: {err_msg}")
-                writer.writerow([shot, int(fs_mhz), "FAIL", err_msg])
-                # 如需详细报错可打开下面这一行
-                # traceback.print_exc()
+                done_count += 1
+                print(f"[{done_count}/{total}] shot={shot} | {status}")
+
+                writer.writerow([shot, fs_mhz, status, message])
+                fcsv.flush()
 
     print("批处理完成。")
 
 
 if __name__ == "__main__":
+    mp.freeze_support()
     main()
